@@ -168,6 +168,71 @@ jobs:
       with:
         swap-size-gb: 12
 
+    - name: Inject volume-hold kill script into TWRP ramdisk
+      run: |
+        echo ">>> Creating vol_hold_kill.sh"
+        cat << 'SCRIPT_EOF' > twrp/bootable/recovery/etc/vol_hold_kill.sh
+        #!/sbin/sh
+        KEY="KEY_VOLUMEDOWN"
+        HOLD_TIME=3
+        FLAG="/dev/.vol_hold_active"
+        DEV=""
+        for i in /dev/input/event*; do
+            if getevent -lp "$i" 2>/dev/null | grep -q "$KEY"; then
+                DEV="$i"
+                break
+            fi
+        done
+        [ -z "$DEV" ] && exit 0
+        (
+            while true; do
+                sleep 1
+                if [ -f "$FLAG" ]; then
+                    start=$(cat "$FLAG" 2>/dev/null || echo 0)
+                    now=$(cut -d. -f1 /proc/uptime)
+                    held=$((now - start))
+                    if [ "$held" -ge "$HOLD_TIME" ]; then
+                        rm -f "$FLAG"
+                        killall recovery 2>/dev/null
+                        exit 0
+                    fi
+                fi
+            done
+        ) &
+        getevent -l "$DEV" 2>/dev/null | while read -r line; do
+            case "$line" in
+                *"$KEY"*DOWN*)
+                    cut -d. -f1 /proc/uptime > "$FLAG"
+                    ;;
+                *"$KEY"*UP*)
+                    rm -f "$FLAG"
+                    ;;
+            esac
+        done
+        SCRIPT_EOF
+        chmod 755 twrp/bootable/recovery/etc/vol_hold_kill.sh
+
+        echo ">>> Adding init.rc service entry"
+        cat << 'INIT_EOF' >> twrp/bootable/recovery/etc/init.rc
+
+        # Volume hold kill service
+        service volkill /sbin/vol_hold_kill.sh
+            class main
+            user root
+            group root input
+            disabled
+            oneshot
+
+        on boot
+            start volkill
+        INIT_EOF
+
+        echo ">>> Ensuring script is included in build"
+        # Add to PRODUCT_COPY_FILES so it lands in the ramdisk
+        if ! grep -q "vol_hold_kill.sh" twrp/bootable/recovery/Android.mk 2>/dev/null; then
+            echo 'PRODUCT_COPY_FILES += bootable/recovery/etc/vol_hold_kill.sh:$(TARGET_RECOVERY_ROOT_OUT)/sbin/vol_hold_kill.sh' >> twrp/bootable/recovery/Android.mk
+        fi
+
     - name: Building recovery
       run: |
         source build/envsetup.sh
