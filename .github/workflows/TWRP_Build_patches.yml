@@ -62,10 +62,10 @@ jobs:
       run: |
         sudo apt update
         sudo apt -y upgrade
-        sudo apt -y install gperf gcc-multilib gcc-10-multilib g++-multilib g++-10-multilib libc6-dev lib32ncurses5-dev \
+        sudo apt -y install gperf gcc-multilib gcc-10-multilib g++-multilib g++-10-multilib libc6-dev \
           x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache lib32readline-dev \
-          lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libwxgtk3.0-gtk3-dev libxml2 lzop pngcrush schedtool \
-          squashfs-tools imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev libncurses5 python
+          lib32z1-dev liblz4-tool libxml2 lzop pngcrush schedtool \
+          squashfs-tools imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev libncurses-dev
 
     - name: Install OpenJDK
       uses: actions/setup-java@v3
@@ -154,12 +154,18 @@ jobs:
 
     - name: Inject volume-hold kill script into TWRP ramdisk
       run: |
-        mkdir -p twrp/bootable/recovery/etc
-        cat << 'SCRIPT_EOF' > twrp/bootable/recovery/etc/vol_hold_kill.sh
+        # Create directories in the device tree's recovery/root (100% reliable ramdisk injection)
+        mkdir -p ${{ github.event.inputs.DEVICE_PATH }}/recovery/root/sbin
+        
+        # Create the script with built-in logging
+        cat << 'SCRIPT_EOF' > ${{ github.event.inputs.DEVICE_PATH }}/recovery/root/sbin/vol_hold_kill.sh
         #!/sbin/sh
+        exec > /tmp/volkill.log 2>&1
+        echo "Starting vol_hold_kill..."
         KEY="KEY_VOLUMEDOWN"
         HOLD_TIME=3
         FLAG="/dev/.vol_hold_active"
+
         DEV=""
         for i in /dev/input/event*; do
             if getevent -lp "$i" 2>/dev/null | grep -q "$KEY"; then
@@ -167,7 +173,24 @@ jobs:
                 break
             fi
         done
-        [ -z "$DEV" ] && exit 0
+
+        if [ -z "$DEV" ]; then
+            KEY="KEY_VOLUMEUP"
+            for i in /dev/input/event*; do
+                if getevent -lp "$i" 2>/dev/null | grep -q "$KEY"; then
+                    DEV="$i"
+                    break
+                fi
+            done
+        fi
+
+        if [ -z "$DEV" ]; then
+            echo "Failed to find volume key device."
+            exit 1
+        fi
+
+        echo "Found device: $DEV for $KEY"
+
         (
             while true; do
                 sleep 1
@@ -176,28 +199,26 @@ jobs:
                     now=$(cut -d. -f1 /proc/uptime)
                     held=$((now - start))
                     if [ "$held" -ge "$HOLD_TIME" ]; then
+                        echo "Hold detected! Killing recovery..."
                         rm -f "$FLAG"
-                        killall recovery 2>/dev/null
+                        killall recovery
                         exit 0
                     fi
                 fi
             done
         ) &
-        getevent -l "$DEV" 2>/dev/null | while read -r line; do
+
+        getevent -l "$DEV" | while read -r line; do
             case "$line" in
-                *"$KEY"*DOWN*)
-                    cut -d. -f1 /proc/uptime > "$FLAG"
-                    ;;
-                *"$KEY"*UP*)
-                    rm -f "$FLAG"
-                    ;;
+                *"$KEY"*DOWN*) cut -d. -f1 /proc/uptime > "$FLAG" ;;
+                *"$KEY"*UP*) rm -f "$FLAG" ;;
             esac
         done
         SCRIPT_EOF
-        chmod 755 twrp/bootable/recovery/etc/vol_hold_kill.sh
+        chmod 755 ${{ github.event.inputs.DEVICE_PATH }}/recovery/root/sbin/vol_hold_kill.sh
 
-        cat << 'INIT_EOF' >> twrp/bootable/recovery/etc/init.rc
-
+        # Create the init trigger
+        cat << 'INIT_EOF' > ${{ github.event.inputs.DEVICE_PATH }}/recovery/root/init.volkill.rc
         service volkill /sbin/vol_hold_kill.sh
             class main
             user root
@@ -210,10 +231,9 @@ jobs:
         on boot
             start volkill
         INIT_EOF
-
-        if ! grep -q "vol_hold_kill.sh" twrp/bootable/recovery/Android.mk 2>/dev/null; then
-            echo 'PRODUCT_COPY_FILES += bootable/recovery/etc/vol_hold_kill.sh:$(TARGET_RECOVERY_ROOT_OUT)/sbin/vol_hold_kill.sh' >> twrp/bootable/recovery/Android.mk
-        fi
+        
+        echo ">>> Injection into device tree recovery/root complete!"
+      working-directory: ${{ steps.pwd.outputs.wsdir }}
 
     - name: Building recovery
       run: |
