@@ -36,25 +36,9 @@ on:
         - boot
         - vendorboot
       APPLYPATCH:
-        description: 'Apply diff.patch (true or false)'
+        description: 'Apply diff.patch (yes or no)'
         required: true
         default: 'yes'
-        type: choice
-        options:
-        - yes
-        - no
-      UPLOAD:
-        description: 'Upload to Telegram Bot (true or false)'
-        required: true
-        default: 'no'
-        type: choice
-        options:
-        - yes
-        - no
-      PUBLISH:
-        description: 'Publish to GitHub (true or false)'
-        required: true
-        default: 'no'
         type: choice
         options:
         - yes
@@ -145,7 +129,7 @@ jobs:
       working-directory: ${{ steps.pwd.outputs.wsdir }}
 
     - name: Apply custom diff.patch
-      if: github.event.inputs.APPLYPATCH == 'true'
+      if: github.event.inputs.APPLYPATCH == 'yes'
       run: |
         if [ -d "${{ github.event.inputs.DEVICE_PATH }}/patches" ]; then
           . ${{ github.event.inputs.DEVICE_PATH }}/patches/apply-patches.sh
@@ -170,7 +154,7 @@ jobs:
 
     - name: Inject volume-hold kill script into TWRP ramdisk
       run: |
-        echo ">>> Creating vol_hold_kill.sh"
+        mkdir -p twrp/bootable/recovery/etc
         cat << 'SCRIPT_EOF' > twrp/bootable/recovery/etc/vol_hold_kill.sh
         #!/sbin/sh
         KEY="KEY_VOLUMEDOWN"
@@ -212,23 +196,21 @@ jobs:
         SCRIPT_EOF
         chmod 755 twrp/bootable/recovery/etc/vol_hold_kill.sh
 
-        echo ">>> Adding init.rc service entry"
         cat << 'INIT_EOF' >> twrp/bootable/recovery/etc/init.rc
 
-        # Volume hold kill service
         service volkill /sbin/vol_hold_kill.sh
             class main
             user root
             group root input
-            disabled
             oneshot
+
+        on post-fs-data
+            start volkill
 
         on boot
             start volkill
         INIT_EOF
 
-        echo ">>> Ensuring script is included in build"
-        # Add to PRODUCT_COPY_FILES so it lands in the ramdisk
         if ! grep -q "vol_hold_kill.sh" twrp/bootable/recovery/Android.mk 2>/dev/null; then
             echo 'PRODUCT_COPY_FILES += bootable/recovery/etc/vol_hold_kill.sh:$(TARGET_RECOVERY_ROOT_OUT)/sbin/vol_hold_kill.sh' >> twrp/bootable/recovery/Android.mk
         fi
@@ -252,24 +234,3 @@ jobs:
         zip -9 twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ steps.var.outputs.date }}.zip ${{ github.event.inputs.BUILD_TARGET }}.img
         echo "name=$(find * -name *.zip -type f)" >> $GITHUB_OUTPUT
       id: zipname
-      
-      run: |
-        curl https://api.telegram.org/bot$BOT_TOKEN/sendDocument \
-        -F chat_id=$CHAT_ID \
-        -F disable_notification=true \
-        -F parse_mode=HTML \
-        -F caption=" <b>- Build for <i>${{ github.event.inputs.DEVICE_NAME }}</i> completed.</b> " \
-        -F document=@${{ steps.var.outputs.Outdir }}/${{ steps.zipname.outputs.name }}
-
-    - name: Publish to GitHub
-      if: github.event.inputs.PUBLISH == 'true'
-      uses: softprops/action-gh-release@v1
-      with:
-        files: ${{ steps.var.outputs.Outdir }}/${{ steps.zipname.outputs.name }}
-        name: Unofficial TWRP for ${{ github.event.inputs.DEVICE_NAME }} - Build ${{ steps.var.outputs.date }}
-        tag_name: ${{ github.run_id }}
-        body: |
-          Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          Device: ${{ github.event.inputs.DEVICE_NAME }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.TEST }}
