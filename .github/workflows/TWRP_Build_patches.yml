@@ -241,19 +241,41 @@ jobs:
     - name: Set Variables
       run: |
         echo "date=$(TZ=Australia/Sydney date +%Y%m%d-%H%M)" >> $GITHUB_OUTPUT
-        echo "Outdir=${GITHUB_WORKSPACE}/twrp/out/target/product/${{ github.event.inputs.DEVICE_NAME }}" >> $GITHUB_OUTPUT
+        echo "outdir=${{ steps.pwd.outputs.wsdir }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}" >> $GITHUB_OUTPUT
       id: var
 
     - name: Add Img to Zip
       run: |
-        cd ${{ steps.var.outputs.Outdir }}
-        zip -9 twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ steps.var.outputs.date }}.zip ${{ github.event.inputs.BUILD_TARGET }}.img
-        echo "name=$(find * -name *.zip -type f)" >> $GITHUB_OUTPUT
-      id: zipname
+        outdir="${{ steps.var.outputs.outdir }}"
+        date="${{ steps.var.outputs.date }}"
+        zipname="twrp-${{ github.event.inputs.DEVICE_NAME }}-${date}.zip"
+        
+        # Verify the image file exists
+        if [ ! -f "$outdir/${{ github.event.inputs.BUILD_TARGET }}.img" ]; then
+          echo "ERROR: ${{ github.event.inputs.BUILD_TARGET }}.img not found in $outdir"
+          echo "Directory contents:"
+          ls -la "$outdir" || echo "Output directory not found"
+          exit 1
+        fi
+        
+        # Create zip file
+        cd "$outdir"
+        zip -9 "$zipname" ${{ github.event.inputs.BUILD_TARGET }}.img
+        
+        # Verify zip was created
+        if [ ! -f "$zipname" ]; then
+          echo "ERROR: Failed to create $zipname"
+          exit 1
+        fi
+        
+        echo "✓ Zip file created successfully"
+        ls -lh "$zipname"
+        echo "zippath=$outdir/$zipname" >> $GITHUB_OUTPUT
+      id: zipfile
 
     - name: Upload TWRP ZIP Artifact
       uses: actions/upload-artifact@v4
       with:
         name: twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ steps.var.outputs.date }}
-        path: ${{ steps.var.outputs.Outdir }}/twrp-*.zip
+        path: ${{ steps.zipfile.outputs.zippath }}
         if-no-files-found: error
