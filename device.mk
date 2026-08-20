@@ -18,8 +18,15 @@ TW_INCLUDE_FASTBOOTD := true
 PRODUCT_PACKAGES += \
 	android.hardware.fastboot@1.1-impl-mock
 
-# API level for Android 14 (AOSP 14)
-PRODUCT_SHIPPING_API_LEVEL := 34
+# API level for Android 16 (AOSP 16)
+PRODUCT_SHIPPING_API_LEVEL := 36
+
+# VNDK
+PRODUCT_USE_VNDK_AS_BASE := true
+
+# Android 16 specific
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.system_ext.shared_libs=com.android.media.swcodec:com.google.android.apps.photos.sharedcodec
 
 # Soong namespaces
 PRODUCT_SOONG_NAMESPACES += \
