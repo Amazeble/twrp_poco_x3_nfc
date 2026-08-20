@@ -125,7 +125,10 @@ jobs:
 
     - name: Clone device tree
       run: |
-        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
+        BASE_URL="https://github.com"
+        USER_PATH="/Amazeble"
+        REPO_PATH="/twrp_poco_x3_nfc"
+        git clone "${BASE_URL}${USER_PATH}${REPO_PATH}" -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
       working-directory: ${{ steps.pwd.outputs.wsdir }}
 
     - name: Apply custom diff.patch
@@ -255,19 +258,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ steps.var.outputs.date }}
-        path: ${{ steps.var.outputs.Outdir }}/${{ steps.zipname.outputs.name }}
+        path: ${{ steps.var.outputs.Outdir }}/twrp-*.zip
         if-no-files-found: error
-
-    - name: Create Automatic Release
-      uses: ncipollo/release-action@v1
-      with:
-        artifacts: "${{ steps.var.outputs.Outdir }}/${{ steps.zipname.outputs.name }}"
-        tag: "TWRP-${{ github.event.inputs.DEVICE_NAME }}-${{ steps.var.outputs.date }}"
-        name: "TWRP Recovery for ${{ github.event.inputs.DEVICE_NAME }} (${{ steps.var.outputs.date }})"
-        body: |
-          Automated build of TWRP Recovery with volume-hold modifications.
-          - **Device**: `${{ github.event.inputs.DEVICE_NAME }}`
-          - **Build Target**: `${{ github.event.inputs.BUILD_TARGET }}image`
-          - **Branch**: `${{ github.event.inputs.MANIFEST_BRANCH }}`
-        allowUpdates: true
-        token: ${{ secrets.GITHUB_TOKEN }}
