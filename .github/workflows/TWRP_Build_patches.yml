@@ -13,7 +13,7 @@ on:
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
         required: true
-        default: 'https://github.com/Amazeble/twrp_poco_x3_nfc'
+        default: 'https://github.com'
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
@@ -48,7 +48,7 @@ jobs:
   build:
     name: Build TWRP by ${{ github.actor }}
     if: github.event.repository.owner.id == github.event.sender.id
-    runs-on: ubuntu-22.04
+    runs-runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
@@ -92,13 +92,13 @@ jobs:
       id: manifest
       with:
         cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1' }}
-        if_true: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git
-        if_false: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git
+        if_true: https://github.com
+        if_false: https://github.com
 
     - name: Install repo
       run: |
         mkdir ~/bin
-        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        curl https://googleapis.com > ~/bin/repo
         chmod a+x ~/bin/repo
         sudo ln -sf ~/bin/repo /usr/bin/repo
       
@@ -153,10 +153,8 @@ jobs:
 
     - name: Inject volume-hold kill script into TWRP ramdisk
       run: |
-        # Create directories in the device tree's recovery/root (100% reliable ramdisk injection)
         mkdir -p ${{ github.event.inputs.DEVICE_PATH }}/recovery/root/sbin
         
-        # Create the script with built-in logging
         cat << 'SCRIPT_EOF' > ${{ github.event.inputs.DEVICE_PATH }}/recovery/root/sbin/vol_hold_kill.sh
         #!/sbin/sh
         exec > /tmp/volkill.log 2>&1
@@ -216,7 +214,6 @@ jobs:
         SCRIPT_EOF
         chmod 755 ${{ github.event.inputs.DEVICE_PATH }}/recovery/root/sbin/vol_hold_kill.sh
 
-        # Create the init trigger
         cat << 'INIT_EOF' > ${{ github.event.inputs.DEVICE_PATH }}/recovery/root/init.volkill.rc
         service volkill /sbin/vol_hold_kill.sh
             class main
@@ -253,3 +250,24 @@ jobs:
         zip -9 twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ steps.var.outputs.date }}.zip ${{ github.event.inputs.BUILD_TARGET }}.img
         echo "name=$(find * -name *.zip -type f)" >> $GITHUB_OUTPUT
       id: zipname
+
+    - name: Upload TWRP ZIP Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ steps.var.outputs.date }}
+        path: ${{ steps.var.outputs.Outdir }}/${{ steps.zipname.outputs.name }}
+        if-no-files-found: error
+
+    - name: Create Automatic Release
+      uses: ncipollo/release-action@v1
+      with:
+        artifacts: "${{ steps.var.outputs.Outdir }}/${{ steps.zipname.outputs.name }}"
+        tag: "TWRP-${{ github.event.inputs.DEVICE_NAME }}-${{ steps.var.outputs.date }}"
+        name: "TWRP Recovery for ${{ github.event.inputs.DEVICE_NAME }} (${{ steps.var.outputs.date }})"
+        body: |
+          Automated build of TWRP Recovery with volume-hold modifications.
+          - **Device**: `${{ github.event.inputs.DEVICE_NAME }}`
+          - **Build Target**: `${{ github.event.inputs.BUILD_TARGET }}image`
+          - **Branch**: `${{ github.event.inputs.MANIFEST_BRANCH }}`
+        allowUpdates: true
+        token: ${{ secrets.GITHUB_TOKEN }}
