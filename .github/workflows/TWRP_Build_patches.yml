@@ -13,7 +13,7 @@ on:
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
         required: true
-        default: 'https://github.com'
+        default: 'https://github.com/Amazeble/twrp_poco_x3_nfc'
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
@@ -92,13 +92,13 @@ jobs:
       id: manifest
       with:
         cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1' }}
-        if_true: https://github.com
-        if_false: https://github.com
+        if_true: https://github.com/minimal-manifest/twrp.git
+        if_false: https://github.com/minimal-manifest/omni.git
 
     - name: Install repo
       run: |
         mkdir ~/bin
-        curl https://googleapis.com > ~/bin/repo
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
         chmod a+x ~/bin/repo
         sudo ln -sf ~/bin/repo /usr/bin/repo
       
@@ -125,10 +125,7 @@ jobs:
 
     - name: Clone device tree
       run: |
-        BASE_URL="https://github.com"
-        USER_PATH="/Amazeble"
-        REPO_PATH="/twrp_poco_x3_nfc"
-        git clone "${BASE_URL}${USER_PATH}${REPO_PATH}" -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
+        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
       working-directory: ${{ steps.pwd.outputs.wsdir }}
 
     - name: Apply custom diff.patch
