@@ -1,0 +1,47 @@
+```gitignore
+# Build artifacts and compiled files
+*.o
+*.obj
+*.out
+*.pyc
+*.class
+*.dll
+*.so
+*.a
+
+# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+target/
+.gradle/
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# System files
+.DS_Store
+Thumbs.db
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Distribution
+dist/
+build/
+```

@@ -6,7 +6,7 @@
 <p>
 
 - [X] ADB
-- [X] Decryption of /data (MIUI Android 12/Custom rom Android 12-13 FBEv1)
+- [X] Decryption of /data (MIUI Android 12-16/Custom rom Android 12-16 FBEv1/v2)
 - [X] Screen brightness settings
 - [X] Vibration support
 - [X] Correct screenshot
