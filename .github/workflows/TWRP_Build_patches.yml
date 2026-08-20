@@ -48,7 +48,7 @@ jobs:
   build:
     name: Build TWRP by ${{ github.actor }}
     if: github.event.repository.owner.id == github.event.sender.id
-    runs-runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
