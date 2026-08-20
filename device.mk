@@ -18,8 +18,8 @@ TW_INCLUDE_FASTBOOTD := true
 PRODUCT_PACKAGES += \
 	android.hardware.fastboot@1.1-impl-mock
 
-# API
-PRODUCT_SHIPPING_API_LEVEL := 29
+# API level for Android 14 (AOSP 14)
+PRODUCT_SHIPPING_API_LEVEL := 34
 
 # Soong namespaces
 PRODUCT_SOONG_NAMESPACES += \
