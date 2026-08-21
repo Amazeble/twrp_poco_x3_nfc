@@ -6,9 +6,10 @@ on:
       MANIFEST_BRANCH:
         description: 'MANIFEST_BRANCH'
         required: true
-        default: 'twrp-12.1'
+        default: 'twrp-14.1'
         type: choice
         options:
+          - twrp-14.1
           - twrp-12.1
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
@@ -17,7 +18,7 @@ on:
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
-        default: 'android-12.1'
+        default: 'android-14'
       DEVICE_PATH:
         description: 'DEVICE_PATH'
         required: true
@@ -62,26 +63,18 @@ jobs:
         run: |
           sudo apt update
           sudo apt -y upgrade
-          sudo apt -y install gperf gcc-multilib gcc-10-multilib g++-multilib g++-10-multilib libc6-dev \
-            x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache lib32readline-dev \
-            lib32z1-dev liblz4-tool libxml2 lzop pngcrush schedtool \
-            squashfs-tools imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev libncurses-dev
+          sudo apt-get install -y git-core gnupg flex bison gperf sdcc build-essential zip curl zlib1g-dev gc libc6-dev-i386 \
+            x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache lib32readline-dev lib32z1-dev \
+            liblz4-tool libcrypto++6-dev libssl-dev libxml2 lzop pngcrush schedtool squashfs-tools imagemagick libbz2-dev lzma \
+            ncftp qemu-user-static libstdc++-10-dev libncurses-dev python3 python3-pip
 
       - name: Install OpenJDK
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
-          java-version: '8'
-
-      - name: Install Python 2
-        if: github.event.inputs.MANIFEST_BRANCH != 'twrp-11' && github.event.inputs.MANIFEST_BRANCH != 'twrp-12.1'
-        run: |
-          sudo apt -y install python2
-          cd /usr/bin
-          sudo ln -sf python2 python
+          java-version: '11'
 
       - name: Switch to Python3
-        if: github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1'
         run: |
           sudo rm -rf /usr/bin/python
           sudo ln -s /usr/bin/python3 /usr/bin/python
@@ -91,23 +84,43 @@ jobs:
         uses: haya14busa/action-cond@v1
         id: manifest
         with:
-          cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1' }}
+          cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1' || github.event.inputs.MANIFEST_BRANCH == 'twrp-14.1' }}
           if_true: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git
           if_false: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git
 
       - name: Install repo
         run: |
-          mkdir ~/bin
+          mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           sudo ln -sf ~/bin/repo /usr/bin/repo
 
       - name: Initialize repo
         run: |
-          mkdir twrp
+          mkdir -p twrp
           cd twrp
           echo "wsdir=$(pwd)" >> $GITHUB_OUTPUT
           git config --global user.name "brigudav"
+          git config --global user.email "alexvl1972@hotmail.com"
+          repo init --depth=1 -u ${{ steps.manifest.outputs.value }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
+        id: pwd
+
+      - name: Repo Sync
+        run: |
+          repo sync -j$(nproc --all) --force-sync
+        working-directory: ${{ steps.pwd.outputs.wsdir }}
+
+      - name: Repopick Patches
+        run: |
+          source build/envsetup.sh
+          repopick 7203
+        working-directory: ${{ steps.pwd.outputs.wsdir }}
+        continue-on-error: true
+
+      - name: Clone device tree
+        run: |
+          git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
+        working-directory: ${{ steps.pwd.outputs.wsdir }}
           git config --global user.email "alexvl1972@hotmail.com"
           repo init --depth=1 -u ${{ steps.manifest.outputs.value }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
         id: pwd
